@@ -1,41 +1,26 @@
 use std::{
     fs::{self, File},
-    io::{BufRead, BufReader, Cursor, Write},
+    io::{BufRead, BufReader, Cursor, Write, stdout}, collections::{HashSet, HashMap}, sync::Mutex,
 };
 
 use git2::{BranchType, Repository};
+use serde::{Serialize, Deserialize};
+use toml::Table;
 use walkdir::WalkDir;
+use lazy_static::lazy_static;
+lazy_static!{
+    static ref MAP:Mutex<HashMap<&'static str,&'static str>> = {
+        let mut map: HashMap<&'static str,&'static str> = HashMap::new();
+        map.insert("https://github.com/", "https://ghproxy.com/https://github.com");
+        map.insert("https://raw.githubusercontent.com", "https://ghproxy.com/https://raw.githubusercontent.com");
+        Mutex::new(map)
+    };
+}
 fn main() {
-    println!("Hello, world!");
-    let repo = match Repository::open("/home/light/rust_projects/gitui") {
-        Ok(repo) => repo,
-        Err(e) => panic!("fail to open /home/light/rust_projects/gitui {:?}", e),
-    };
+    let contents = fs::read_to_string("config.toml")
+        .expect("Should have been able to read the file");
+    let value = contents.parse::<Table>().unwrap();
 
-    let branches = match repo.branches(Some(BranchType::Remote)) {
-        Ok(branches) => branches,
-        Err(e) => panic!("获取远程分支失败 {:?}", e),
-    };
-
-    for branch in branches.into_iter() {
-        match branch {
-            Ok(inner) => {
-                let name = inner.0.name();
-                let name = name.unwrap();
-                match name {
-                    Some(inner_name) => {
-                        print!("获取到分支名称为 {:?}", inner_name);
-                    }
-                    None => {
-                        print!("获取分支失败");
-                    }
-                }
-            }
-            Err(_) => {
-                panic!("获取分支失败")
-            }
-        }
-    }
 }
 
 #[test]
@@ -96,4 +81,18 @@ pub fn walk_file() {
             fs::remove_file(temp_file_path).unwrap();
         }
     }
+}
+
+#[derive(Deserialize,Serialize,Debug)]
+struct Config{
+    #[serde(rename = "proxy.map")]
+    map_url:HashSet<String>,
+}
+
+#[test]
+fn parse_toml_file(){
+    let contents = fs::read_to_string("config.toml")
+        .expect("Should have been able to read the file");
+    let value = contents.parse::<Table>().unwrap();
+    assert_eq!(value["https://github.com/"].as_str(),Some("https://ghproxy.com/https://github.com"));
 }
